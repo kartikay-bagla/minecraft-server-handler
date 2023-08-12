@@ -6,7 +6,6 @@ from minecraft_utils import get_info as get_mc_info
 from utils import getenv, send_notification
 import boto3
 
-ENV = getenv("ENV")
 SECRET_PASSWORD = getenv("SECRET_PASSWORD")
 INSTANCE_ID = getenv("INSTANCE_ID")
 AWS_ACCESS_KEY = getenv("AWS_ACCESS_KEY")
