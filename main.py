@@ -39,9 +39,9 @@ def get_status(secret_key: str):
     if secret_key != SECRET_PASSWORD:
         raise HTTPException(status_code=401, detail="Incorrect secret key")
     try:
-        instance_status = ec2.describe_instance_status(InstanceIds=[INSTANCE_ID])[
-            "InstanceStatuses"
-        ][0]["InstanceState"]["Name"]
+        instance_status = ec2.describe_instance_status(
+            InstanceIds=[INSTANCE_ID], IncludeAllInstances=True
+        )["InstanceStatuses"][0]["InstanceState"]["Name"]
         if instance_status != "running":
             return {"instance_status": instance_status}
     except Exception:
@@ -58,7 +58,7 @@ def get_status(secret_key: str):
         }
 
 
-@app.post("/start_instance/{secret_key}")
+@app.get("/start_instance/{secret_key}")
 def start_instance(secret_key: str):
     if secret_key != SECRET_PASSWORD:
         raise HTTPException(status_code=401, detail="Incorrect secret key")
