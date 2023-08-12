@@ -63,6 +63,15 @@ def start_instance(secret_key: str):
     if secret_key != SECRET_PASSWORD:
         raise HTTPException(status_code=401, detail="Incorrect secret key")
     try:
+        instance_status = ec2.describe_instance_status(
+            InstanceIds=[INSTANCE_ID], IncludeAllInstances=True
+        )["InstanceStatuses"][0]["InstanceState"]["Name"]
+        if instance_status == "running":
+            return {"instance_status": instance_status}
+    except Exception:
+        logger.exception("Unable to get EC2 status.")
+        return {"error": "Unable to get EC2 status."}
+    try:
         ec2.start_instances(InstanceIds=[INSTANCE_ID])
         send_notification("Started instance.")
         return {"message": f"Starting instance {INSTANCE_ID}"}
