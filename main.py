@@ -3,6 +3,7 @@ from logging import getLogger
 from fastapi import HTTPException, FastAPI
 from fastapi_utils.tasks import repeat_every
 from minecraft_utils import get_info as get_mc_info
+from factorio_utils import get_info as get_fc_info
 from utils import getenv, send_notification
 import boto3
 
@@ -11,11 +12,10 @@ INSTANCE_ID = getenv("INSTANCE_ID")
 AWS_ACCESS_KEY = getenv("AWS_ACCESS_KEY")
 AWS_SECRET_ACCESS_KEY = getenv("AWS_SECRET_ACCESS_KEY")
 MINECRAFT_HOST = getenv("MINECRAFT_HOST")
-MINECRAFT_PORT = getenv("MINECRAFT_PORT")
-try:
-    MINECRAFT_PORT = int(MINECRAFT_PORT)
-except ValueError:
-    raise ValueError("MINECRAFT_PORT must be an integer")
+MINECRAFT_PORT = int(getenv("MINECRAFT_PORT"))
+FACTORIO_RCON_HOST = getenv("FACTORIO_RCON_HOST")
+FACTORIO_RCON_PORT = int(getenv("FACTORIO_RCON_PORT"))
+FACTORIO_RCON_PASSWORD = getenv("FACTORIO_RCON_PASSWORD")
 
 FILENAME = "counter.txt"
 
@@ -38,24 +38,38 @@ def read_root():
 def get_status(secret_key: str):
     if secret_key != SECRET_PASSWORD:
         raise HTTPException(status_code=401, detail="Incorrect secret key")
+    resp = {}
     try:
         instance_status = ec2.describe_instance_status(
             InstanceIds=[INSTANCE_ID], IncludeAllInstances=True
         )["InstanceStatuses"][0]["InstanceState"]["Name"]
         if instance_status != "running":
-            return {"instance_status": instance_status}
+            resp["instance_status"] = instance_status
+            return resp
     except Exception:
         logger.exception("Unable to get EC2 status.")
-        return {"error": "Unable to get EC2 status."}
+        send_notification("Unable to get EC2 status.")
+        resp["instance_status"] = "Unable to get EC2 status."
+        return resp
     try:
         mc_info = get_mc_info(host=MINECRAFT_HOST, port=MINECRAFT_PORT)
-        return {"instance_status": instance_status, "minecraft_status": mc_info}
+        resp["minecraft_status"] = mc_info
     except Exception:
         logger.exception("Unable to get MC status.")
-        return {
-            "instance_status": instance_status,
-            "minecraft_status": {"error": "Unable to get MC status."},
-        }
+        send_notification("Unable to get MC status")
+        resp["minecraft_status"] = {"error": "Unable to get MC status."}
+    try:
+        fc_info = get_fc_info(
+            host=FACTORIO_RCON_HOST,
+            port=FACTORIO_RCON_PORT,
+            password=FACTORIO_RCON_PASSWORD,
+        )
+        resp["factorio_status"] = fc_info
+    except Exception:
+        logger.exception("Unable to get FC status.")
+        send_notification("Unable to get FC status")
+        resp["factorio_status"] = {"error": "Unable to get FC status."}
+    return resp
 
 
 @app.get("/start_instance/{secret_key}")
@@ -107,6 +121,11 @@ def reset_file():
 def check_and_close_instance():
     try:
         mc_info = get_mc_info(host=MINECRAFT_HOST, port=MINECRAFT_PORT)
+        fc_info = get_fc_info(
+            host=FACTORIO_RCON_HOST,
+            port=FACTORIO_RCON_PORT,
+            password=FACTORIO_RCON_PASSWORD,
+        )
     except (ConnectionRefusedError, TimeoutError):
         logger.info("Connection refused or timed out.")
         return  # instance is probably off
@@ -114,12 +133,13 @@ def check_and_close_instance():
         logger.exception("Unable to connect to server.")
         return
     try:
-        num_players_online = mc_info["players"]["online"]
+        mc_num_players_online = mc_info["players"]["online"]
+        fc_num_players_online = fc_info["player_count"]
     except KeyError:
         send_notification("Unable to get player count.")
         logger.exception("Unable to get player count.")
         return
-    if num_players_online == 0:
+    if mc_num_players_online == 0 and fc_num_players_online == 0:
         counter = get_counter()
         counter += 1
         if counter < 3:

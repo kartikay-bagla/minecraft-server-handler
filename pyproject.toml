@@ -7,13 +7,14 @@ readme = "README.md"
 packages = [{include = "minecraft_server_handler"}]
 
 [tool.poetry.dependencies]
-python = "^3.9"
+python = "^3.10"
 fastapi = "^0.101.0"
 fastapi-utils = "^0.2.1"
 uvicorn = "^0.23.2"
 boto3 = "^1.28.25"
 python-dotenv = "^1.0.0"
 requests = "^2.31.0"
+rcon = "^2.4.2"
 
 [tool.poetry.group.dev.dependencies]
 flake8 = "^6.1.0"
