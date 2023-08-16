@@ -43,8 +43,8 @@ def get_status(secret_key: str):
         instance_status = ec2.describe_instance_status(
             InstanceIds=[INSTANCE_ID], IncludeAllInstances=True
         )["InstanceStatuses"][0]["InstanceState"]["Name"]
+        resp["instance_status"] = instance_status
         if instance_status != "running":
-            resp["instance_status"] = instance_status
             return resp
     except Exception:
         logger.exception("Unable to get EC2 status.")
