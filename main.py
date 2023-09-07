@@ -139,30 +139,38 @@ def reset_file():
     update_counter(0)
 
 
+def _get_mc_player_count() -> int:
+    mc_info = get_mc_info(host=MINECRAFT_HOST, port=MINECRAFT_PORT)
+    return mc_info["players"]["online"]
+
+
+def _get_fc_player_count() -> int:
+    fc_info = get_fc_info(
+        host=FACTORIO_RCON_HOST,
+        port=FACTORIO_RCON_PORT,
+        password=FACTORIO_RCON_PASSWORD,
+    )
+    return fc_info["player_count"]
+
+
 @app.on_event("startup")
 @repeat_every(seconds=60, logger=logger)
 def check_and_close_instance():
-    try:
-        mc_info = get_mc_info(host=MINECRAFT_HOST, port=MINECRAFT_PORT)
-        fc_info = get_fc_info(
-            host=FACTORIO_RCON_HOST,
-            port=FACTORIO_RCON_PORT,
-            password=FACTORIO_RCON_PASSWORD,
-        )
-    except (ConnectionRefusedError, TimeoutError):
-        logger.info("Connection refused or timed out.")
-        return  # instance is probably off
-    except Exception:
-        logger.exception("Unable to connect to server.")
-        return
-    try:
-        mc_num_players_online = mc_info["players"]["online"]
-        fc_num_players_online = fc_info["player_count"]
-    except KeyError:
-        send_notification("Unable to get player count.")
-        logger.exception("Unable to get player count.")
-        return
-    if mc_num_players_online == 0 and fc_num_players_online == 0:
+    count = {}
+    for gn, fn in [("mc", _get_mc_player_count), ("fc", _get_fc_player_count)]:
+        try:
+            count[gn] = fn()
+        except (ConnectionRefusedError, TimeoutError):
+            logger.info("Connection refused or timed out.")
+        except KeyError:
+            send_notification("Unable to get player count.")
+            logger.exception("Unable to get player count.")
+
+    total_count = 0
+    for pc in count.values():
+        total_count += pc
+
+    if total_count == 0:
         counter = get_counter()
         counter += 1
         if counter < 3:
