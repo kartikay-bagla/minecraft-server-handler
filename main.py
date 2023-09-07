@@ -1,13 +1,16 @@
+import json
 from logging import getLogger
+from typing import Annotated
 
-from fastapi import HTTPException, FastAPI
+from fastapi import Depends, Header, HTTPException, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from fastapi_utils.tasks import repeat_every
 from minecraft_utils import get_info as get_mc_info
 from factorio_utils import get_info as get_fc_info
 from utils import getenv, send_notification
 import boto3
 
-SECRET_PASSWORD = getenv("SECRET_PASSWORD")
 INSTANCE_ID = getenv("INSTANCE_ID")
 AWS_ACCESS_KEY = getenv("AWS_ACCESS_KEY")
 AWS_SECRET_ACCESS_KEY = getenv("AWS_SECRET_ACCESS_KEY")
@@ -17,9 +20,33 @@ FACTORIO_RCON_HOST = getenv("FACTORIO_RCON_HOST")
 FACTORIO_RCON_PORT = int(getenv("FACTORIO_RCON_PORT"))
 FACTORIO_RCON_PASSWORD = getenv("FACTORIO_RCON_PASSWORD")
 
-FILENAME = "counter.txt"
+COUNTER_FILENAME = "counter.txt"
+USERS_FILENAME = "users.json"
+with open(USERS_FILENAME) as f:
+    USERS: dict[str, str] = json.load(f)
+HTML_FILENAME = "index.html"
+with open(HTML_FILENAME) as f:
+    HTML_PAGE = f.read()
+
+
+def verify_user(
+    username: Annotated[str | None, Header()] = None,
+    password: Annotated[str | None, Header()] = None,
+):
+    for user, passwd in USERS.items():
+        if username == user and password == passwd:
+            return
+    raise HTTPException(status_code=401, detail="Incorrect username or password.")
+
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 ec2 = boto3.client(
     "ec2",
     region_name="ap-south-1",
@@ -31,13 +58,11 @@ logger = getLogger()
 
 @app.get("/")
 def read_root():
-    return {"message": "Fluff off"}
+    return HTMLResponse(content=HTML_PAGE)
 
 
-@app.get("/status/{secret_key}")
-def get_status(secret_key: str):
-    if secret_key != SECRET_PASSWORD:
-        raise HTTPException(status_code=401, detail="Incorrect secret key")
+@app.get("/status", dependencies=[Depends(verify_user)])
+def get_status():
     resp = {}
     try:
         instance_status = ec2.describe_instance_status(
@@ -72,10 +97,8 @@ def get_status(secret_key: str):
     return resp
 
 
-@app.get("/start_instance/{secret_key}")
-def start_instance(secret_key: str):
-    if secret_key != SECRET_PASSWORD:
-        raise HTTPException(status_code=401, detail="Incorrect secret key")
+@app.get("/start_server", dependencies=[Depends(verify_user)])
+def start_instance():
     try:
         instance_status = ec2.describe_instance_status(
             InstanceIds=[INSTANCE_ID], IncludeAllInstances=True
@@ -96,7 +119,7 @@ def start_instance(secret_key: str):
 
 def get_counter(tries: int = 3) -> int:
     try:
-        with open(FILENAME, "r") as f:
+        with open(COUNTER_FILENAME, "r") as f:
             return int(f.read())
     except Exception as e:
         logger.exception("Unable to read file, resetting.")
@@ -107,7 +130,7 @@ def get_counter(tries: int = 3) -> int:
 
 
 def update_counter(value: int):
-    with open(FILENAME, "w") as f:
+    with open(COUNTER_FILENAME, "w") as f:
         f.write(f"{value}")
 
 

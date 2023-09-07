@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Server Control</title>
+    <!-- Include Materialize CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+    <style>
+        /* Style for the code-like text */
+        #responseText {
+            font-family: monospace;
+            white-space: pre-wrap;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #f5f5f5;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1 class="center-align">Server Control</h1>
+        <div class="row center-align">
+            <div class="col s6">
+                <button id="statusBtn" class="btn waves-effect waves-light">Status</button>
+            </div>
+            <div class="col s6">
+                <button id="startServerBtn" class="btn waves-effect waves-light">Start Server</button>
+            </div>
+        </div>
+        <div class="row">
+            <div class="input-field col s6">
+                <input id="username" type="text" class="validate">
+                <label for="username">Username</label>
+            </div>
+            <div class="input-field col s6">
+                <input id="password" type="password" class="validate">
+                <label for="password">Password</label>
+            </div>
+        </div>
+        <div class="row">
+            <div class="col s12">
+                <p id="responseText">Send a request.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include jQuery and Materialize JavaScript -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+
+    <script>
+        // Function to make API requests
+        async function makeRequest(url, username, password) {
+            try {
+                resp = await fetch(
+                    window.location.origin + url,
+                    {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Username': username,
+                            'Password': password
+                        }
+                    }
+                );
+                data = await resp.json();
+                $('#responseText').text(JSON.stringify(data, null, 2));
+            }
+            catch (error) {
+                $('#responseText').text(JSON.stringify(error, null, 2));
+            }
+        }
+
+        // Click event handler for the Status button
+        $('#statusBtn').click(function () {
+            const username = $('#username').val();
+            const password = $('#password').val();
+            makeRequest('/status', username, password);
+        });
+
+        // Click event handler for the Start Server button
+        $('#startServerBtn').click(function () {
+            const username = $('#username').val();
+            const password = $('#password').val();
+            makeRequest('/start_server', username, password);
+        });
+    </script>
+</body>
+
+</html>
