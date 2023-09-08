@@ -97,12 +97,16 @@ def get_status():
     return resp
 
 
+def _get_instance_status() -> str:
+    return ec2.describe_instance_status(
+        InstanceIds=[INSTANCE_ID], IncludeAllInstances=True
+    )["InstanceStatuses"][0]["InstanceState"]["Name"]
+
+
 @app.get("/start_server", dependencies=[Depends(verify_user)])
 def start_instance():
     try:
-        instance_status = ec2.describe_instance_status(
-            InstanceIds=[INSTANCE_ID], IncludeAllInstances=True
-        )["InstanceStatuses"][0]["InstanceState"]["Name"]
+        instance_status = _get_instance_status()
         if instance_status == "running":
             return {"instance_status": instance_status}
     except Exception:
@@ -165,6 +169,9 @@ def check_and_close_instance():
         except KeyError:
             send_notification("Unable to get player count.")
             logger.exception("Unable to get player count.")
+
+    if _get_instance_status() != "running":
+        return
 
     total_count = 0
     for pc in count.values():
